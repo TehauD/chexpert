@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 import io
+import sys
 from typing import Optional
+
+# Ensure local package imports work when running Streamlit directly.
+_SRC_DIR = Path(__file__).resolve().parents[2]
+if str(_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(_SRC_DIR))
 
 import numpy as np
 import pandas as pd
