@@ -1,0 +1,2 @@
+[console_scripts]
+chexpert = chexpert_mvp.cli:app

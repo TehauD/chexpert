@@ -1,0 +1,51 @@
+# CheXpert dataset root inside this repo
+chexpert_root: data/chexpert/CheXpert-v1.0-small
+
+# Train longer for more stable AUROC
+epochs: 12
+
+# Expanded CheXpert findings
+labels:
+  - No Finding
+  - Enlarged Cardiomediastinum
+  - Cardiomegaly
+  - Lung Opacity
+  - Lung Lesion
+  - Edema
+  - Consolidation
+  - Pneumonia
+  - Atelectasis
+  - Pneumothorax
+  - Pleural Effusion
+  - Pleural Other
+  - Fracture
+  - Support Devices
+
+# Uncertain label handling: zero | one | ignore
+uncertain: zero
+
+# Training
+img_size: 448
+batch_size: 16
+num_workers: 4
+
+lr: 0.0003
+weight_decay: 0.0001
+
+amp: true
+seed: 1337
+device: auto
+
+# quick smoke test limits (0 means no limit)
+limit_train: 0
+limit_valid: 0
+
+# Backbone options: densenet121 | densenet169 | densenet201 | convnext_tiny | convnext_small | efficientnet_v2_s
+backbone: densenet121
+
+# Optional: freeze backbone for warmup epochs (0 disables)
+freeze_backbone_epochs: 1
+use_pos_weight: true
+
+# Outputs
+output_dir: outputs/runs

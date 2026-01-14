@@ -1,0 +1,128 @@
+@dataclass(frozen=True)
+class CamOutput:
+    cam: np.ndarray            # 2D CAM in [0,1]
+    prob: float
+    label_index: int
+    label_name: str
+    method: str
+    notes: Optional[str] = None
+
+
+def gradcam_pp(
+    model: nn.Module,
+    x: torch.Tensor,
+    labels: List[str],
+    target_index: Optional[int] = None,
+    device: Optional[torch.device] = None,
+) -> CamOutput:
+    """
+    Grad-CAM++ (safe for PyTorch >= 2.x autograd view rules).
+
+    Key fix:
+      - clone() feature maps + gradients captured by hooks to avoid:
+        "BackwardHookFunctionBackward is a view and is being modified inplace"
+
+    Args:
+      model: torch.nn.Module
+      x: input tensor [1,3,H,W] normalized
+      labels: label names length C
+      target_index: class idx to explain (None => argmax sigmoid prob)
+      device: optional torch.device
+
+    Returns:
+      CamOutput with cam in [0,1] on feature-map spatial size.
+      (Caller can resize to original image size.)
+    """
+    model.eval()
+    device = device or next(model.parameters()).device
+    x = x.to(device)
+
+    target_layer = _find_target_layer(model)
+
+    hook = _Hook()
+    h_fwd = target_layer.register_forward_hook(hook.fwd)
+    # full backward hook is recommended in modern PyTorch
+    h_bwd = target_layer.register_full_backward_hook(hook.bwd)
+
+    try:
+        # Clear any old grads
+        model.zero_grad(set_to_none=True)
+        changed = disable_inplace_relu_(model)
+        # (optional) print/log changed count in notes
+
+        # Forward
+        logits = model(x)  # [1,C]
+        probs = torch.sigmoid(logits)[0].detach().cpu().numpy()
+
+        # Choose class
+        if target_index is None:
+            target_index = int(np.argmax(probs))
+        if target_index < 0 or target_index >= len(labels):
+            raise ValueError(f"target_index out of range: {target_index} (labels={len(labels)})")
+
+        # Backward on the selected logit (NOT sigmoid prob)
+        score = logits[0, target_index]
+        score.backward(retain_graph=False)
+
+        # Pull hooked tensors
+        if hook.fmap is None or hook.grad is None:
+            raise RuntimeError("Grad-CAM++ hooks failed to capture fmap/grad (None).")
+
+        # IMPORTANT: clone to break view/in-place restrictions in PyTorch autograd
+        fmap = hook.fmap.detach().clone()
+        grad = hook.grad.detach().clone()
+
+        # Some models return tuples from features; handle gracefully
+        if isinstance(fmap, (tuple, list)):
+            fmap = fmap[0]
+        if isinstance(grad, (tuple, list)):
+            grad = grad[0]
+
+        # fmap/grad shapes should be [1, K, Hf, Wf]
+        if fmap.ndim != 4 or grad.ndim != 4:
+            raise RuntimeError(f"Unexpected fmap/grad shapes: fmap={tuple(fmap.shape)} grad={tuple(grad.shape)}")
+
+        fmap = fmap[0]  # [K,Hf,Wf]
+        grad = grad[0]  # [K,Hf,Wf]
+
+        # Grad-CAM++ weights
+        # alpha_ij = grad^2 / (2*grad^2 + sum_{a,b}( fmap * grad^3 ))
+        grad2 = grad.pow(2)
+        grad3 = grad.pow(3)
+
+        # Denominator term: 2*grad^2 + fmap * grad^3 summed over spatial dims
+        denom = 2.0 * grad2 + (fmap * grad3).sum(dim=(1, 2), keepdim=True)
+
+        # Avoid divide-by-zero
+        denom = torch.where(denom != 0.0, denom, torch.ones_like(denom))
+        alpha = grad2 / denom
+
+        # Positive gradients only
+        relu_grad = F.relu(grad)
+
+        # Channel weights
+        weights = (alpha * relu_grad).sum(dim=(1, 2))  # [K]
+
+        # Weighted combination of feature maps
+        cam = (weights[:, None, None] * fmap).sum(dim=0)
+        cam = F.relu(cam)
+
+        # Normalize to [0,1]
+        cam = cam - cam.min()
+        cam = cam / cam.max().clamp(min=1e-8)
+
+        cam_np = cam.detach().cpu().numpy().astype(np.float32)
+
+        return CamOutput(
+            cam=cam_np,
+            prob=float(probs[target_index]),
+            label_index=int(target_index),
+            label_name=labels[target_index],
+            method="gradcam++",
+            notes="hook=.features | cloned fmap/grad",
+        )
+
+    finally:
+        # Always remove hooks
+        h_fwd.remove()
+        h_bwd.remove()

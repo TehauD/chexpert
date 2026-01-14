@@ -1,0 +1,24 @@
+[project]
+name = "chexpert-mvp"
+version = "0.2.0"
+requires-python = ">=3.10"
+dependencies = [
+  "torch>=2.2",
+  "torchvision>=0.17",
+  "numpy>=1.26",
+  "pandas>=2.2",
+  "pillow>=10.2",
+  "tqdm>=4.66",
+  "scikit-learn>=1.4",
+  "matplotlib>=3.8",
+  "opencv-python>=4.9",
+  "rich>=13.7",
+  "typer>=0.12",
+  "pyyaml>=6.0.1",
+]
+
+[project.scripts]
+chexpert = "chexpert_mvp.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
