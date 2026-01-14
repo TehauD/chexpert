@@ -1,0 +1,27 @@
+{
+  "chexpert_root": "data\\chexpert\\CheXpert-v1.0-small",
+  "output_dir": "outputs\\runs",
+  "train_csv": "data\\chexpert\\CheXpert-v1.0-small\\train.csv",
+  "valid_csv": "data\\chexpert\\CheXpert-v1.0-small\\valid.csv",
+  "labels": [
+    "Atelectasis",
+    "Cardiomegaly",
+    "Consolidation",
+    "Edema",
+    "Pleural Effusion"
+  ],
+  "uncertain": "zero",
+  "backbone": "densenet121",
+  "img_size": 384,
+  "batch_size": 16,
+  "num_workers": 4,
+  "epochs": 5,
+  "lr": 0.0003,
+  "weight_decay": 0.0001,
+  "freeze_backbone_epochs": 0,
+  "amp": true,
+  "seed": 1337,
+  "device": "auto",
+  "limit_train": 0,
+  "limit_valid": 0
+}

@@ -7,8 +7,8 @@ data/
 # ==========================
 # MODEL OUTPUTS
 # ==========================
-outputs/
-!outputs/.gitkeep
+# outputs/
+# !outputs/.gitkeep
 
 # ==========================
 # PYTHON
